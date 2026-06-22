@@ -1,0 +1,51 @@
+[
+  {
+    "type": "personal",
+    "bank": "VPBank",
+    "owner": "Hoàng Công Tiến",
+    "accountNumber": "38124102003",
+    "qrImage": "https://lh3.googleusercontent.com/aida-public/AB6AXuAS5F720MF2N50yvzRv78yKcfo5_jwtcJVX12Nu53Ctw2wf2YMdsFPetp_iIOk8jfqwwC7ETmFYIlodsD06dxvZX8mEgm-qPDlJujbpvOOj4KBUVCvxh5d7tdmp6krf9bYjn1KvlkKDHXjsdA-R7XLJ9Vs6uXwCrvAgsx2XJ1L3oADrqk2i6raiP-mkfvk6_0FF1-DaDzS89izpyb9I05NVDEKo0AQ-ZbsH8vm3Yvu_ydybMr86ZKmJ8Roq4-in8vCqt6c1KuNyXqlM"
+  },
+  {
+    "type": "personal",
+    "bank": "Vietcombank",
+    "owner": "Nguyễn Văn Phúc",
+    "accountNumber": "1049170702",
+    "qrImage": "https://lh3.googleusercontent.com/aida-public/AB6AXuArwuv9sgvroJDhp2H7ohwCL1bh6F-rNZbPimW2EGDSoQJ_O9YWMTkv-C0j411-wDq3IZuYSSaYhwdhh3T461fEYyTFCX6GW3VoompGsCJhaa7Ffx9lraTtrX0E4Zfs1gT3qK5VbK0IScqCTJt1G9HuK3F_h0jgPe4TMvCbmaucDcKjZj2ydXI-zHTu6Tf9cX8foq1GeHyI7gjBnvcs11j2x-t7pm3s1-rTDxbymr7C2_71K6-64OFUxzgZ3wedPAHTmNmH3lphB-ov"
+  },
+  {
+    "type": "personal",
+    "bank": "Techcombank",
+    "owner": "Lương Anh Tú",
+    "accountNumber": "9519 4120 01",
+    "qrImage": "https://lh3.googleusercontent.com/aida-public/AB6AXuDtN28IzHCeNi9eQbFQMsKcJWv5DT7prB_QscsH_Wi0EP2SwMpl7YvNCsRCBARtQp8gJBSome3xK1ZS-6H-MVGmVGlG5IaaGIml7YRXLlYMZvElL40yW0xUkRg7OYmrF_oDSOp6H5g6P4xnKN6T7VIHXVyboK4BdLqAcaom1IpPkh6-TCUMQlwyACxe1qvt9MzE0T9MSRiJD0TE32Xkg4XPvRa_l-Lbec48L0C4YVqTFgjo60JwYUIinkWPrqF9N4jyuBDLw_XzuRBr"
+  },
+  {
+    "type": "personal",
+    "bank": "BIDV",
+    "owner": "Trần Minh Hoàng",
+    "accountNumber": "12010000123456",
+    "qrImage": "https://lh3.googleusercontent.com/aida-public/AB6AXuAS5F720MF2N50yvzRv78yKcfo5_jwtcJVX12Nu53Ctw2wf2YMdsFPetp_iIOk8jfqwwC7ETmFYIlodsD06dxvZX8mEgm-qPDlJujbpvOOj4KBUVCvxh5d7tdmp6krf9bYjn1KvlkKDHXjsdA-R7XLJ9Vs6uXwCrvAgsx2XJ1L3oADrqk2i6raiP-mkfvk6_0FF1-DaDzS89izpyb9I05NVDEKo0AQ-ZbsH8vm3Yvu_ydybMr86ZKmJ8Roq4-in8vCqt6c1KuNyXqlM"
+  },
+  {
+    "type": "personal",
+    "bank": "MB Bank",
+    "owner": "Lê Thị Mai",
+    "accountNumber": "000123456789",
+    "qrImage": "https://lh3.googleusercontent.com/aida-public/AB6AXuArwuv9sgvroJDhp2H7ohwCL1bh6F-rNZbPimW2EGDSoQJ_O9YWMTkv-C0j411-wDq3IZuYSSaYhwdhh3T461fEYyTFCX6GW3VoompGsCJhaa7Ffx9lraTtrX0E4Zfs1gT3qK5VbK0IScqCTJt1G9HuK3F_h0jgPe4TMvCbmaucDcKjZj2ydXI-zHTu6Tf9cX8foq1GeHyI7gjBnvcs11j2x-t7pm3s1-rTDxbymr7C2_71K6-64OFUxzgZ3wedPAHTmNmH3lphB-ov"
+  },
+  {
+    "type": "personal",
+    "bank": "Agribank",
+    "owner": "Phạm Quốc Bảo",
+    "accountNumber": "1500205001234",
+    "qrImage": "https://lh3.googleusercontent.com/aida-public/AB6AXuDtN28IzHCeNi9eQbFQMsKcJWv5DT7prB_QscsH_Wi0EP2SwMpl7YvNCsRCBARtQp8gJBSome3xK1ZS-6H-MVGmVGlG5IaaGIml7YRXLlYMZvElL40yW0xUkRg7OYmrF_oDSOp6H5g6P4xnKN6T7VIHXVyboK4BdLqAcaom1IpPkh6-TCUMQlwyACxe1qvt9MzE0T9MSRiJD0TE32Xkg4XPvRa_l-Lbec48L0C4YVqTFgjo60JwYUIinkWPrqF9N4jyuBDLw_XzuRBr"
+  },
+  {
+    "type": "group",
+    "bank": "Momo",
+    "owner": "Quỹ Team",
+    "accountNumber": "090 1234 567",
+    "qrImage": "https://lh3.googleusercontent.com/aida-public/AB6AXuBtnzvRNCfhVNw5gTTxpXw0SN1rf6g-l2JxVqK4Lo8Y8McGPh9I2jhPUhFUPjyfld5ebTMnyse_QcwZBA-dcxGFCIpjjqCk4z-XT7tUllSX2BoWivOyDkCaH1QiV9icFjy5AI-qDJig9qYY9LtLVwNDoNoBWmfGCn75SO_kN68UnBOd8DuiYJBogYdcOdvNstrpzVm7rYoAjoUbCKYWXhog7P_SPzMW3TuvSuR0UKPoxJkamFMHV6Rz_DWh6U2jodF1yBilfP_n5H7n"
+  }
+]
