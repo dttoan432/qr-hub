@@ -1,412 +1,353 @@
-// QR Hub - Core JavaScript Logic (Dynamic & Modular)
+'use strict';
+
+const icons = {
+  qr: '<rect x="3" y="3" width="6" height="6" rx="1"/><rect x="15" y="3" width="6" height="6" rx="1"/><rect x="3" y="15" width="6" height="6" rx="1"/><path d="M15 15h3v3h3v3h-6v-3m6-3v-3"/>',
+  search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
+  user: '<circle cx="12" cy="8" r="3.5"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/>',
+  users: '<circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6m2 3a6 6 0 0 1 3 5v2"/>',
+  close: '<path d="m6 6 12 12M6 18 18 6"/>',
+  copy: '<rect x="8" y="3" width="12" height="14" rx="2"/><path d="M16 21H6a2 2 0 0 1-2-2V8"/>',
+  download: '<path d="M12 3v12m-5-5 5 5 5-5M4 16v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/>',
+  link: '<path d="m10 13 4-4m-5 7-2 2a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m2 0 2-2a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0" transform="translate(1 0)"/>',
+  arrow: '<path d="M4 12h16m-6-6 6 6-6 6"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/>'
+};
+const icon = name => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name]}</svg>`;
+const $ = id => document.getElementById(id);
+document.querySelectorAll('[data-icon]').forEach(el => { el.innerHTML = icon(el.dataset.icon); });
+
 let qrData = [];
+let qrById = new Map();
 let activeTab = 'personal';
 let searchKeyword = '';
 let activeBankFilter = 'Tất cả';
-let currentSelectedQR = null; // Store currently selected QR item in modal
+let currentSelectedQR = null;
+let dataReady = false;
+let loading = false;
+let returnFocus = null;
+let closingHistory = false;
+let toastTimer;
+// Only entries created by this document can safely navigate back on explicit close.
+const navigationToken = `${Date.now()}-${Math.random()}`;
+const modal = $('qrModal');
+const grids = { personal: $('personalGrid'), group: $('groupGrid') };
+const tabs = { personal: $('tabPersonal'), group: $('tabGroup') };
 
-// DOM Elements
-const personalGrid = document.getElementById('personalGrid');
-const groupGrid = document.getElementById('groupGrid');
-const tabPersonal = document.getElementById('tabPersonal');
-const tabGroup = document.getElementById('tabGroup');
-const searchInput = document.getElementById('searchInput');
-const bankFiltersContainer = document.getElementById('bankFilters');
-
-// Modal Elements
-const modal = document.getElementById('qrModal');
-const modalContent = document.getElementById('modalContent');
-const modalName = document.getElementById('modalName');
-const modalBank = document.getElementById('modalBank');
-const modalAccount = document.getElementById('modalAccount');
-const modalQR = document.getElementById('modalQR');
-const btnDownloadQR = document.getElementById('btnDownloadQR');
-const btnCopyModal = document.getElementById('btnCopyModal');
-
-// Init application on load
-window.addEventListener('DOMContentLoaded', () => {
-    // Hide modal on start
-    if (modal) {
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
-    }
-    
-    fetchData();
-    setupEventListeners();
-});
-
-// Setup event listeners
-function setupEventListeners() {
-    // Search input instant search
-    if (searchInput) {
-        searchInput.addEventListener('input', (e) => {
-            searchKeyword = e.target.value;
-            renderAll();
-        });
-    }
-
-    // Modal click outside to close
-    if (modal) {
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal || e.target.classList.contains('modal-overlay')) {
-                closeQRModal();
-            }
-        });
-    }
-
-    // Escape key press to close modal
-    window.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-            closeQRModal();
-        }
-    });
-
-    // Modal Copy button
-    if (btnCopyModal) {
-        btnCopyModal.addEventListener('click', () => {
-            if (currentSelectedQR) {
-                copyToClipboard(currentSelectedQR.accountNumber, btnCopyModal);
-            }
-        });
-    }
-
-    // Modal Download button
-    if (btnDownloadQR) {
-        btnDownloadQR.addEventListener('click', () => {
-            if (currentSelectedQR) {
-                downloadQRImage(currentSelectedQR.qrImage, `${currentSelectedQR.owner}_${currentSelectedQR.bank}.png`);
-            }
-        });
-    }
+function normalizeStr(value) {
+  return value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/\s+/g, '');
 }
 
-// Fetch data from data.json
 async function fetchData() {
-    try {
-        const response = await fetch('data.json');
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        qrData = await response.json();
-        
-        // Group and sort data alphabetically by Vietnamese Owner Name
-        sortQRData();
-        
-        // Generate filters dynamically based on fetched bank names
-        generateBankFilters();
-        
-        // Initial render
-        renderAll();
-    } catch (error) {
-        console.error('Failed to load QR database:', error);
-        showToast('Không thể tải cơ sở dữ liệu QR. Vui lòng kiểm tra lại!');
+  if (loading) return;
+  loading = true;
+  $('loadError').hidden = true;
+  $('resultCount').textContent = 'Đang tải danh bạ…';
+  grids[activeTab].setAttribute('aria-busy', 'true');
+  try {
+    const response = await fetch('data.json');
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    if (!Array.isArray(data) || data.some(item => !item ||
+      !['personal', 'group'].includes(item.type) ||
+      ['owner', 'bank', 'accountNumber', 'qrImage'].some(key => typeof item[key] !== 'string' || !item[key].trim()))) {
+      throw new Error('Invalid QR data');
     }
-}
-
-// Sort data alphabetically by owner name (using Vietnamese locale rules)
-function sortQRData() {
-    qrData.sort((a, b) => {
-        // Use Vietnamese localeCompare for correct alphabetical order
-        return a.owner.localeCompare(b.owner, 'vi', { sensitivity: 'accent' });
-    });
-}
-
-// Dynamic Bank filter generation
-function generateBankFilters() {
-    if (!bankFiltersContainer) return;
-    
-    // Extract unique banks from data
-    const banks = new Set();
-    qrData.forEach(item => {
-        if (item.bank) banks.add(item.bank);
-    });
-    
-    const sortedBanks = Array.from(banks).sort((a, b) => a.localeCompare(b, 'vi'));
-    
-    // Clear and add "Tất cả" plus bank options
-    bankFiltersContainer.innerHTML = '';
-    
-    const allFilters = ['Tất cả', ...sortedBanks];
-    
-    allFilters.forEach(bank => {
-        const btn = document.createElement('button');
-        btn.innerText = bank;
-        btn.className = getFilterButtonClass(bank === activeBankFilter);
-        btn.addEventListener('click', () => {
-            activeBankFilter = bank;
-            // Update UI styles of all filter buttons
-            Array.from(bankFiltersContainer.children).forEach(child => {
-                child.className = getFilterButtonClass(child.innerText === activeBankFilter);
-            });
-            renderAll();
-        });
-        bankFiltersContainer.appendChild(btn);
-    });
-}
-
-// Helper to get button Tailwind classes based on active state
-function getFilterButtonClass(isActive) {
-    if (isActive) {
-        return 'px-4 py-2 rounded-full bg-primary text-on-primary font-label-md text-label-sm transition-all shadow-sm cursor-pointer';
-    } else {
-        return 'px-4 py-2 rounded-full bg-white border border-slate-200 text-on-surface-variant hover:bg-primary/5 hover:text-primary font-label-md text-label-sm transition-all shadow-sm cursor-pointer';
+    qrData = data.sort((a, b) => a.owner.localeCompare(b.owner, 'vi', { sensitivity: 'accent' }));
+    qrById = new Map();
+    const duplicateIds = new Set();
+    for (const item of qrData) {
+      if (typeof item.id !== 'string' || !/^qr-[a-z0-9-]+$/.test(item.id)) continue;
+      if (qrById.has(item.id)) duplicateIds.add(item.id);
+      qrById.set(item.id, item);
     }
-}
-
-// Global switch tab action
-function switchTab(type) {
-    activeTab = type;
-    
-    if (activeTab === 'personal') {
-        personalGrid.classList.remove('hidden');
-        groupGrid.classList.add('hidden');
-        tabPersonal.classList.add('tab-active');
-        tabPersonal.classList.remove('text-on-surface-variant');
-        tabGroup.classList.remove('tab-active');
-        tabGroup.classList.add('text-on-surface-variant');
-    } else {
-        personalGrid.classList.add('hidden');
-        groupGrid.classList.remove('hidden');
-        tabGroup.classList.add('tab-active');
-        tabGroup.classList.remove('text-on-surface-variant');
-        tabPersonal.classList.remove('tab-active');
-        tabPersonal.classList.add('text-on-surface-variant');
+    // Ambiguous links must never choose the wrong recipient; keep their cards visible.
+    duplicateIds.forEach(id => qrById.delete(id));
+    dataReady = true;
+    $('totalCount').textContent = `${qrData.length} mã QR`;
+    for (const type of ['personal', 'group']) {
+      $(`${type}Count`).textContent = qrData.filter(item => item.type === type).length;
     }
-    
+    generateBankFilters();
     renderAll();
+    syncModalFromURL();
+  } catch (error) {
+    $('loadError').hidden = false;
+    $('resultCount').textContent = 'Danh bạ chưa tải được';
+    showToast('Không thể tải danh bạ QR. Vui lòng thử lại.');
+  } finally {
+    loading = false;
+    Object.values(grids).forEach(grid => grid.setAttribute('aria-busy', 'false'));
+  }
 }
 
-// Normalization function to clean and strip accents for smart search
-function normalizeStr(str) {
-    return str
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '') // remove diacritics
-        .replace(/đ/g, 'd')
-        .replace(/\s+/g, ''); // strip spaces
+function generateBankFilters() {
+  $('bankFilters').replaceChildren();
+  const banks = [...new Set(qrData.map(item => item.bank))].sort((a, b) => a.localeCompare(b, 'vi'));
+  for (const bank of ['Tất cả', ...banks]) {
+    const button = document.createElement('button');
+    button.className = 'filter-chip';
+    button.textContent = bank;
+    button.setAttribute('aria-pressed', String(bank === activeBankFilter));
+    button.addEventListener('click', () => {
+      activeBankFilter = bank;
+      updateFilterStates();
+      renderAll();
+    });
+    $('bankFilters').append(button);
+  }
 }
 
-// Render both personal and group grids based on current state (tab, search, filter)
+function updateFilterStates() {
+  for (const button of $('bankFilters').children) {
+    button.setAttribute('aria-pressed', String(button.textContent === activeBankFilter));
+  }
+}
+
+function switchTab(type) {
+  activeTab = type;
+  renderAll();
+}
+
+function resetFilters() {
+  searchKeyword = '';
+  activeBankFilter = 'Tất cả';
+  $('searchInput').value = '';
+  updateFilterStates();
+  renderAll();
+  $('searchInput').focus();
+}
+
 function renderAll() {
-    // Clear grids
-    personalGrid.innerHTML = '';
-    groupGrid.innerHTML = '';
-    
-    // Normalize keywords for robust matching
-    const searchNormalized = normalizeStr(searchKeyword);
-    
-    // Filter active items
-    const filteredItems = qrData.filter(item => {
-        // Filter by tab
-        if (item.type !== activeTab) return false;
-        
-        // Filter by bank
-        if (activeBankFilter !== 'Tất cả' && item.bank !== activeBankFilter) return false;
-        
-        // Filter by search keyword (owner or account number)
-        if (searchKeyword.trim() !== '') {
-            const ownerNormalized = normalizeStr(item.owner);
-            const accountNormalized = normalizeStr(item.accountNumber);
-            const bankNormalized = normalizeStr(item.bank);
-            
-            const isMatch = ownerNormalized.includes(searchNormalized) || 
-                            accountNormalized.includes(searchNormalized) ||
-                            bankNormalized.includes(searchNormalized);
-                            
-            if (!isMatch) return false;
-        }
-        
-        return true;
-    });
-    
-    const targetGrid = activeTab === 'personal' ? personalGrid : groupGrid;
-    
-    if (filteredItems.length === 0) {
-        // Render "No results" visual placeholder
-        targetGrid.className = 'col-span-full py-16 flex flex-col items-center justify-center text-center';
-        targetGrid.innerHTML = `
-            <div class="bg-white/50 backdrop-blur-md border border-slate-100 rounded-3xl p-8 max-w-sm shadow-sm flex flex-col items-center">
-                <span class="material-symbols-outlined text-outline text-5xl mb-4 text-slate-400">search_off</span>
-                <h4 class="font-headline-md text-on-surface font-semibold mb-2">Không tìm thấy QR nào</h4>
-                <p class="font-body-md text-on-surface-variant text-sm">Vui lòng thử lại với từ khóa hoặc ngân hàng khác.</p>
-            </div>
-        `;
-    } else {
-        // Reset grid structure if it was changed to centered column layout
-        targetGrid.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-card-gap';
-        
-        filteredItems.forEach(item => {
-            const card = createQRCard(item);
-            targetGrid.appendChild(card);
-        });
-    }
+  for (const type of ['personal', 'group']) {
+    grids[type].hidden = type !== activeTab;
+    tabs[type].setAttribute('aria-selected', String(type === activeTab));
+    tabs[type].tabIndex = type === activeTab ? 0 : -1;
+    grids[type].replaceChildren();
+  }
+  $('clearSearch').hidden = !searchKeyword;
+  if (!dataReady) return;
+  const query = normalizeStr(searchKeyword);
+  const items = qrData.filter(item => item.type === activeTab &&
+    (activeBankFilter === 'Tất cả' || item.bank === activeBankFilter) &&
+    [item.owner, item.accountNumber, item.bank].some(value => normalizeStr(value).includes(query)));
+  $('resultCount').textContent = `${items.length} mã QR ${activeTab === 'personal' ? 'cá nhân' : 'nhóm'}${activeBankFilter === 'Tất cả' ? '' : ` · ${activeBankFilter}`}`;
+  if (!items.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.innerHTML = `${icon('search')}<h2>Không tìm thấy mã QR</h2><p>Thử tên, số tài khoản hoặc chọn ngân hàng khác.</p><button class="button secondary">Xóa bộ lọc</button>`;
+    empty.querySelector('button').addEventListener('click', resetFilters);
+    grids[activeTab].append(empty);
+  } else {
+    grids[activeTab].append(...items.map(createQRCard));
+  }
 }
 
-// HTML Card Generator
 function createQRCard(item) {
-    const isGroup = item.type === 'group';
-    const cardDiv = document.createElement('div');
-    cardDiv.className = `glass-card rounded-[24px] p-8 group cursor-pointer transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl flex flex-col justify-between ${
-        isGroup ? 'border-t-4 border-t-secondary-container' : ''
-    }`;
-    
-    // Set card click handler to open modal (except when clicking on copy button)
-    cardDiv.addEventListener('click', () => {
-        openQRModal(item);
-    });
-    
-    cardDiv.innerHTML = `
-        <div class="flex flex-col gap-6 w-full">
-            <div class="flex flex-col gap-1">
-                <div class="flex items-center gap-2 text-primary">
-                    <span class="material-symbols-outlined text-headline-md">${isGroup ? 'group' : 'account_balance'}</span>
-                    <span class="font-label-md text-label-md font-bold uppercase tracking-wider">${item.bank}</span>
-                </div>
-                <h3 class="font-headline-md text-headline-md text-on-surface font-bold line-clamp-1">${item.owner}</h3>
-            </div>
-            <div class="bg-white rounded-xl p-4 border border-outline-variant/30 shadow-sm flex items-center justify-center aspect-square overflow-hidden qr-inset">
-                <img alt="QR Code" class="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105" src="${item.qrImage}" loading="lazy">
-            </div>
-            <div class="flex items-center justify-between pt-4 border-t border-outline-variant/30">
-                <div class="flex flex-col">
-                    <span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Số tài khoản</span>
-                    <span class="font-body-md text-body-md font-mono font-semibold text-on-surface">${item.accountNumber}</span>
-                </div>
-                <button class="material-symbols-outlined text-primary p-2 hover:bg-primary/5 rounded-lg transition-all btn-copy" title="Sao chép số tài khoản">content_copy</button>
-            </div>
-        </div>
-    `;
-    
-    // Attach click listener for copying to avoid card opening modal
-    const copyBtn = cardDiv.querySelector('.btn-copy');
-    copyBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        copyToClipboard(item.accountNumber, copyBtn);
-    });
-    
-    return cardDiv;
+  const card = document.createElement('article');
+  card.className = 'qr-card';
+  card.innerHTML = `<button class="card-open"><span class="bank-line"><span class="bank-dot"></span><span class="bank-name"></span></span><span class="card-title"></span><span class="card-image-frame"><img loading="lazy" decoding="async"><span class="image-error" hidden>Không tải được ảnh QR</span></span></button><div class="card-footer"><div><span class="field-label">Số tài khoản</span><span class="account-number"></span></div><button class="icon-button btn-copy">${icon('copy')}</button></div>`;
+  card.querySelector('.bank-name').textContent = item.bank;
+  card.querySelector('.card-title').textContent = item.owner;
+  card.querySelector('.account-number').textContent = item.accountNumber;
+  const open = card.querySelector('.card-open');
+  open.setAttribute('aria-label', `Xem QR của ${item.owner} · ${item.bank}`);
+  open.dataset.qrId = item.id || '';
+  open.addEventListener('click', () => openQRModal(item));
+  const img = card.querySelector('img');
+  img.alt = `Mã QR ${item.owner}, ${item.bank}`;
+  img.addEventListener('error', () => { img.hidden = true; img.nextElementSibling.hidden = false; });
+  img.src = item.qrImage;
+  const copy = card.querySelector('.btn-copy');
+  copy.setAttribute('aria-label', `Sao chép số tài khoản của ${item.owner}`);
+  copy.addEventListener('click', () => copyText(item.accountNumber.replace(/\s+/g, ''), 'Đã sao chép số tài khoản.'));
+  // Preserve pointer access from the rest of the card without nesting interactive controls.
+  card.addEventListener('click', event => { if (!event.target.closest('button')) open.click(); });
+  return card;
 }
 
-// Modal open with transition
+function urlWithoutQR() {
+  const url = new URL(location.href);
+  url.searchParams.delete('qr');
+  return url;
+}
+
 function openQRModal(item) {
-    currentSelectedQR = item;
-    
-    modalName.innerText = item.owner;
-    modalBank.innerText = item.bank;
-    modalAccount.innerText = item.accountNumber;
-    modalQR.src = item.qrImage;
-    
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
-    
-    // Add micro-interaction transition
-    setTimeout(() => {
-        modalContent.classList.remove('scale-95', 'opacity-0');
-        modalContent.classList.add('scale-100', 'opacity-100');
-    }, 10);
+  if (closingHistory) return;
+  if (qrById.get(item.id) !== item) {
+    showToast('Mã QR chưa có định danh duy nhất. Vui lòng kiểm tra dữ liệu.');
+    return;
+  }
+  const url = new URL(location.href);
+  if (url.searchParams.getAll('qr').length === 1 && url.searchParams.get('qr') === item.id) {
+    syncModalFromURL();
+    return;
+  }
+  const wasOpen = modal.open;
+  const base = urlWithoutQR().href;
+  url.searchParams.set('qr', item.id);
+  if (wasOpen) {
+    history.replaceState(history.state, '', url);
+  } else {
+    history.pushState({ ...history.state, qrHub: { token: navigationToken, base } }, '', url);
+  }
+  syncModalFromURL();
 }
 
-// Modal close with transition
+function syncModalFromURL() {
+  if (!dataReady) return;
+  const url = new URL(location.href);
+  const values = url.searchParams.getAll('qr');
+  if (!values.length) { hideModal(); return; }
+  const item = values.length === 1 ? qrById.get(values[0]) : null;
+  if (!item) {
+    history.replaceState(history.state, '', urlWithoutQR());
+    hideModal();
+    showToast('Liên kết QR không hợp lệ hoặc không còn tồn tại.');
+    return;
+  }
+  if (activeTab !== item.type) switchTab(item.type);
+  renderModal(item);
+}
+
+function renderModal(item) {
+  if (currentSelectedQR === item && modal.open) return;
+  currentSelectedQR = item;
+  $('modalName').textContent = item.owner;
+  $('modalBank').textContent = item.bank;
+  $('modalAccount').textContent = item.accountNumber;
+  $('modalQR').alt = `Mã QR chuyển khoản của ${item.owner}, ${item.bank}`;
+  $('modalQR').hidden = false;
+  $('modalQR').nextElementSibling.hidden = true;
+  $('modalQR').src = item.qrImage;
+  if (!modal.open) {
+    returnFocus = document.activeElement;
+    $('toast').hidden = true;
+    document.body.classList.add('modal-open');
+    modal.showModal();
+    modal.scrollTop = 0;
+  }
+}
+
+function hideModal() {
+  if (!modal.open) return;
+  const selectedId = currentSelectedQR?.id;
+  modal.close();
+  currentSelectedQR = null;
+  document.body.classList.remove('modal-open');
+  $('modalToast').hidden = true;
+  const matchingCard = [...document.querySelectorAll('.card-open')].find(el => el.dataset.qrId === selectedId);
+  const target = returnFocus?.isConnected && returnFocus !== document.body ? returnFocus : matchingCard || tabs[activeTab];
+  target.focus({ preventScroll: true });
+  returnFocus = null;
+}
+
 function closeQRModal() {
-    modalContent.classList.add('scale-95', 'opacity-0');
-    modalContent.classList.remove('scale-100', 'opacity-100');
-    
-    setTimeout(() => {
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
-        currentSelectedQR = null;
-    }, 300);
+  if (!modal.open || closingHistory) return;
+  const marker = history.state?.qrHub;
+  if (marker?.token === navigationToken && marker.base === urlWithoutQR().href) {
+    closingHistory = true;
+    history.back();
+  } else {
+    history.replaceState(history.state, '', urlWithoutQR());
+    syncModalFromURL();
+  }
 }
 
-// Copy account number helper
-function copyToClipboard(text, buttonElement) {
-    // Strip space characters before copying
-    const plainText = text.replace(/\s+/g, '');
-    
-    navigator.clipboard.writeText(plainText).then(() => {
-        showToast('Đã sao chép số tài khoản vào bộ nhớ tạm!');
-        
-        // Visual button feedback
-        if (buttonElement) {
-            const originalIcon = buttonElement.innerText;
-            buttonElement.innerText = 'done';
-            buttonElement.classList.add('text-secondary');
-            
-            setTimeout(() => {
-                buttonElement.innerText = originalIcon;
-                buttonElement.classList.remove('text-secondary');
-            }, 1500);
-        }
-    }).catch(err => {
-        console.error('Copy failed:', err);
-        showToast('Sao chép thất bại. Vui lòng sao chép thủ công!');
-    });
+async function copyText(text, successMessage) {
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+    await navigator.clipboard.writeText(text);
+    showToast(successMessage);
+  } catch {
+    // A selected textarea also supports older HTTP-hosted deployments.
+    const input = document.createElement('textarea');
+    input.value = text;
+    input.setAttribute('aria-label', 'Nội dung sao chép');
+    input.style.cssText = 'position:fixed;left:0;top:0;opacity:0;pointer-events:none';
+    const focused = document.activeElement;
+    (modal.open ? modal : document.body).append(input);
+    input.select();
+    let copied = false;
+    try { copied = document.execCommand('copy'); } catch { /* Report failure below. */ }
+    input.remove();
+    focused?.focus({ preventScroll: true });
+    showToast(copied ? successMessage : 'Không thể sao chép. Hãy sao chép thủ công số tài khoản hoặc URL trên thanh địa chỉ.');
+  }
 }
 
-// Download QR image safely with CORS handling
-async function downloadQRImage(url, filename) {
-    showToast('Đang chuẩn bị tải mã QR...');
-    try {
-        // Fetch image as blob
-        const response = await fetch(url, { mode: 'cors' });
-        if (!response.ok) throw new Error('Network error');
-        
-        const blob = await response.blob();
-        const blobUrl = window.URL.createObjectURL(blob);
-        
-        const link = document.createElement('a');
-        link.href = blobUrl;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        window.URL.revokeObjectURL(blobUrl);
-        showToast('Đã tải mã QR thành công!');
-    } catch (error) {
-        console.warn('CORS blocking direct download, attempting fallback', error);
-        
-        // Fallback: Open image in a new tab with download instructions
-        try {
-            const link = document.createElement('a');
-            link.href = url;
-            link.target = '_blank';
-            link.download = filename;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            showToast('Đã mở ảnh trong tab mới. Hãy nhấn chuột phải chọn "Lưu hình ảnh thành..."');
-        } catch (fbErr) {
-            console.error('Fallback failed:', fbErr);
-            showToast('Không thể tải ảnh. Vui lòng bấm chuột phải vào ảnh và chọn lưu!');
-        }
-    }
+async function downloadQRImage() {
+  const item = currentSelectedQR;
+  if (!item) return;
+  $('btnDownloadQR').disabled = true;
+  try {
+    const response = await fetch(item.qrImage);
+    if (!response.ok) throw new Error('Image unavailable');
+    const blob = await response.blob();
+    const objectURL = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectURL;
+    const extension = new URL(item.qrImage, location.href).pathname.match(/\.(png|jpe?g|webp)$/i)?.[1].toLowerCase() || 'png';
+    link.download = `${item.owner}_${item.bank}.${extension}`;
+    modal.append(link);
+    link.click();
+    link.remove();
+    // Let the browser consume the URL before releasing its blob.
+    setTimeout(() => URL.revokeObjectURL(objectURL), 1000);
+    showToast('Đã gửi ảnh QR gốc tới trình tải xuống.');
+  } catch {
+    showToast('Không thể tải ảnh QR. Vui lòng thử lại hoặc lưu trực tiếp ảnh đang hiển thị.');
+  } finally { $('btnDownloadQR').disabled = false; }
 }
 
-// Custom Toast notification UI element
 function showToast(message) {
-    // Clear any existing toasts to avoid stacking clutter
-    const oldToasts = document.querySelectorAll('.custom-toast');
-    oldToasts.forEach(t => t.remove());
-    
-    const toast = document.createElement('div');
-    toast.className = 'custom-toast fixed bottom-6 left-1/2 -translate-x-1/2 md:left-auto md:right-6 md:translate-x-0 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl transition-all duration-300 transform translate-y-10 opacity-0 z-[100] font-label-md text-sm flex items-center gap-3 border border-slate-800';
-    toast.innerHTML = `
-        <span class="material-symbols-outlined text-[#6cf8bb]">info</span>
-        <span>${message}</span>
-    `;
-    document.body.appendChild(toast);
-    
-    // Slide and fade in
-    setTimeout(() => {
-        toast.classList.remove('translate-y-10', 'opacity-0');
-    }, 10);
-    
-    // Auto-remove after 2.5s
-    setTimeout(() => {
-        toast.classList.add('translate-y-10', 'opacity-0');
-        setTimeout(() => {
-            toast.remove();
-        }, 300);
-    }, 2500);
+  clearTimeout(toastTimer);
+  $('toast').hidden = true;
+  $('modalToast').hidden = true;
+  const toast = modal.open ? $('modalToast') : $('toast');
+  toast.textContent = message;
+  toast.hidden = false;
+  toastTimer = setTimeout(() => { toast.hidden = true; }, 4000);
 }
+
+$('searchInput').addEventListener('input', event => { searchKeyword = event.target.value; renderAll(); });
+$('clearSearch').addEventListener('click', () => { searchKeyword = ''; $('searchInput').value = ''; renderAll(); $('searchInput').focus(); });
+$('retryLoad').addEventListener('click', fetchData);
+for (const [type, tab] of Object.entries(tabs)) {
+  tab.addEventListener('click', () => switchTab(type));
+  tab.addEventListener('keydown', event => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const next = event.key === 'Home' ? 'personal' : event.key === 'End' ? 'group' : type === 'personal' ? 'group' : 'personal';
+    switchTab(next);
+    tabs[next].focus();
+  });
+}
+$('closeModal').addEventListener('click', closeQRModal);
+$('closeModalBottom').addEventListener('click', closeQRModal);
+modal.addEventListener('cancel', event => { event.preventDefault(); closeQRModal(); });
+modal.addEventListener('keydown', event => {
+  if (event.key !== 'Tab') return;
+  const controls = [...modal.querySelectorAll('button:not(:disabled)')].filter(el => !el.hidden);
+  const first = controls[0];
+  const last = controls.at(-1);
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+});
+let pointerStartedOnBackdrop = false;
+const isBackdrop = event => {
+  const box = modal.getBoundingClientRect();
+  return event.target === modal && (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom);
+};
+modal.addEventListener('pointerdown', event => { pointerStartedOnBackdrop = isBackdrop(event); });
+modal.addEventListener('click', event => { if (pointerStartedOnBackdrop && isBackdrop(event)) closeQRModal(); pointerStartedOnBackdrop = false; });
+$('modalQR').addEventListener('error', () => { $('modalQR').hidden = true; $('modalQR').nextElementSibling.hidden = false; });
+$('btnCopyModal').addEventListener('click', () => { if (currentSelectedQR) copyText(currentSelectedQR.accountNumber.replace(/\s+/g, ''), 'Đã sao chép số tài khoản.'); });
+$('btnShareQR').addEventListener('click', () => { if (currentSelectedQR) copyText(location.href, 'Đã sao chép liên kết QR.'); });
+$('btnDownloadQR').addEventListener('click', downloadQRImage);
+window.addEventListener('popstate', () => { closingHistory = false; syncModalFromURL(); });
+fetchData();
